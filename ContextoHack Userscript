@@ -1,0 +1,324 @@
+// ==UserScript==
+// @name         Contexto Hack
+// @namespace    your-namespace-here
+// @version      2.0
+// @author       longkidkoolstar
+// @description  This is a Contexto Hack that Gives you the word of the day for everyday.
+// @icon         https://styles.redditmedia.com/t5_72ajpm/styles/communityIcon_2y8kmvv8z6wa1.png?width=256&v=enabled&s=497ae2191ac283aadfc5da5941539fcc5a575e1b
+// @match        https://contexto.me/*
+// @license      CC BY-NC-ND 4.0
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // JSONBin.io configurations
+    const binId = '649efcdbb89b1e2299b7c40c';
+    const accessKey = '$2b$10$7aFXF1Powlysz7vBu8xY2u9QOHeJUxwtcE4d2cW2/AFg6AhZP4XR2';
+
+    // Function to check if a string contains the number 1 by itself
+    function containsOne(str) {
+        return /^\D*1\D*$/.test(str);
+    }
+
+    // Retrieve saved words and game numbers from JSONBin.io
+    let savedWords = {};
+    let gameNumbers = {};
+
+function fetchSavedWords() {
+  setInterval(() => {
+    GM_xmlhttpRequest({
+      method: 'GET',
+      url: `https://api.jsonbin.io/v3/b/${binId}/latest`,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Bin-Access-Token': accessKey,
+        'X-Access-Key': accessKey
+      },
+      onload: function(response) {
+        if (response.status === 200) {
+          const responseData = JSON.parse(response.responseText);
+          if (responseData.record) {
+            const recordData = responseData.record;
+            if (recordData.savedWords) {
+              savedWords = recordData.savedWords;
+            }
+            if (recordData.gameNumbers) {
+              gameNumbers = recordData.gameNumbers;
+            }
+          }
+          console.log('Read saved words successfully');
+          updateSavedWordsGUI();
+        }
+      }
+    });
+  }, 20000); // Fetch every 1000 milliseconds (20 second)
+}
+
+
+
+    // Function to save words and game numbers to JSONBin.io
+    // Function to save words and game numbers to JSONBin.io
+    function saveWordsToJSONBin() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://api.jsonbin.io/v3/b/${binId}`,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Bin-Access-Token': accessKey,
+                'X-Access-Key': accessKey
+            },
+            onload: function(response) {
+                if (response.status === 200) {
+                    const responseData = JSON.parse(response.responseText);
+                    const existingData = responseData.record;
+
+                    // Merge existing data with new data
+                    const mergedData = {
+                        savedWords: { ...existingData.savedWords, ...savedWords },
+                        gameNumbers: { ...existingData.gameNumbers, ...gameNumbers }
+                    };
+
+                    GM_xmlhttpRequest({
+                        method: 'PUT',
+                        url: `https://api.jsonbin.io/v3/b/${binId}`,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Bin-Access-Token': accessKey,
+                            'X-Access-Key': accessKey
+                        },
+                        data: JSON.stringify(mergedData),
+                        onload: function(response) {
+                            if (response.status === 200) {
+                                console.log('Words and game numbers saved successfully');
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+
+    // Function to search for words and game numbers to save on the page
+    let currentGameNumber = '';
+
+    function searchForWordsAndGameNumbers() {
+        // Find the game number element on the page
+        const gameNumberElement = document.querySelector('.info-bar span:nth-child(2)');
+        currentGameNumber = gameNumberElement ? gameNumberElement.textContent.trim().replace('#', '') : '';
+
+        // Find all the div elements with class "row" on the page
+        const rows = document.querySelectorAll('.row');
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            // Find all the span elements within the row
+            const spans = row.querySelectorAll('span');
+            let hasOne = false;
+            let word = '';
+            for (let j = 0; j < spans.length; j++) {
+                const span = spans[j];
+                if (containsOne(span.innerHTML)) {
+                    hasOne = true;
+                } else {
+                    word = span.innerHTML;
+                }
+            }
+            // Save the word and game number to the objects if the word has the number 1 by itself and it's not already saved
+            if (hasOne && word && !savedWords[word]) {
+                savedWords[word] = true;
+                gameNumbers[word] = currentGameNumber; // Save the current game number instead of searching for it again
+                // Log the game number for the saved word
+                console.log(`Game number for ${word}: ${currentGameNumber}`);
+            }
+        }
+
+        // Save the updated objects to JSONBin.io
+        saveWordsToJSONBin();
+
+        // Update the GUI with the saved words and game numbers
+        updateSavedWordsGUI();
+    }
+
+    // Function to reveal the word for the current game number
+    function revealWordForCurrentGameNumber() {
+        // Find the saved word for the current game number
+        const savedWordsForCurrentGameNumber = Object.keys(savedWords).filter((word) => {
+            return gameNumbers[word] === currentGameNumber;
+        });
+
+        // Display the saved word in an alert box
+        if (savedWordsForCurrentGameNumber.length > 0) {
+            alert(`The word for game number ${currentGameNumber} is: ${savedWordsForCurrentGameNumber[0]}`);
+        } else {
+            alert(`No saved words for game number ${currentGameNumber}`);
+        }
+    }
+
+    // Create a button to reveal the word for the current game number
+    const revealButton = document.createElement('button');
+    revealButton.textContent = 'Reveal Word';
+    revealButton.addEventListener('click', revealWordForCurrentGameNumber);
+    document.body.appendChild(revealButton);
+
+    // Create a div element to hold the saved words GUI
+    const savedWordsGUI = document.createElement('div');
+    savedWordsGUI.id = 'saved-words-list';
+    document.body.appendChild(savedWordsGUI);
+
+    // Create a button to show the saved words GUI
+    const showSavedWordsButton = document.createElement('button');
+    showSavedWordsButton.textContent = 'Saved Words';
+    showSavedWordsButton.addEventListener('click', () => {
+        savedWordsGUI.classList.add('open');
+    });
+    document.body.appendChild(showSavedWordsButton);
+
+    // Create a button to minimize the saved words GUI
+    const minimizeSavedWordsButton = document.createElement('button');
+    minimizeSavedWordsButton.innerHTML = '<img src="https://th.bing.com/th/id/R.6a6eda3ee63c80ebc02dc830b395324e?rik=t2E%2fYYP3IGbSsQ&pid=ImgRaw&r=0" alt="Close">';
+    minimizeSavedWordsButton.addEventListener('click', () => {
+        savedWordsGUI.classList.remove('open');
+    });
+    savedWordsGUI.appendChild(minimizeSavedWordsButton);
+
+
+    // Create a list element to display the saved words
+    const savedWordsList = document.createElement('ul');
+    savedWordsGUI.appendChild(savedWordsList);
+
+    // Function to update the saved words GUI with the saved words and game numbers
+    function updateSavedWordsGUI() {
+        // Clear the current saved words list
+        savedWordsList.innerHTML = '';
+
+        // Get all saved words sorted by game number
+        const savedWordsSorted = Object.keys(gameNumbers).sort((a, b) => {
+            return gameNumbers[a] - gameNumbers[b];
+        });
+
+        // Add each saved word to the list
+        for (let i = 0; i < savedWordsSorted.length; i++) {
+            const word = savedWordsSorted[i];
+            const gameNumber = gameNumbers[word];
+            const listItem = document.createElement('li');
+            listItem.textContent = `${word} (Game ${gameNumber})`;
+            savedWordsList.appendChild(listItem);
+        }
+    }
+
+    // Update the saved words GUI with the saved words and game numbers
+    updateSavedWordsGUI();
+
+    // Function to clear the saved words and game numbers from JSONBin.io
+    function clearSavedWords() {
+        savedWords = {};
+        gameNumbers = {};
+        saveWordsToJSONBin();
+        updateSavedWordsGUI();
+        alert('Saved words cleared');
+    }
+
+    // Create a button to clear the saved words and game numbers
+    const clearSavedWordsButton = document.createElement('button');
+    clearSavedWordsButton.textContent = 'Clear Saved Words';
+    clearSavedWordsButton.addEventListener('click', clearSavedWords);
+    savedWordsGUI.appendChild(clearSavedWordsButton);
+
+    // Function to export the saved words and game numbers as JSON
+    function exportSavedWords() {
+        const savedWordsData = {
+            savedWords: savedWords,
+            gameNumbers: gameNumbers
+        };
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(savedWordsData));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute('href', dataStr);
+        downloadAnchorNode.setAttribute('download', 'contexto_saved_words.json');
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    // Create a button to export the saved words and game numbers
+    const exportSavedWordsButton = document.createElement('button');
+    exportSavedWordsButton.textContent = 'Export Saved Words';
+    exportSavedWordsButton.addEventListener('click', exportSavedWords);
+    savedWordsGUI.appendChild(exportSavedWordsButton);
+
+    // Function to import saved words and game numbers from JSON
+    function importSavedWords() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const savedWordsData = JSON.parse(e.target.result);
+                    savedWords = savedWordsData.savedWords;
+                    gameNumbers = savedWordsData.gameNumbers;
+                    saveWordsToJSONBin();
+                    updateSavedWordsGUI();
+                    alert('Saved words imported');
+                } catch (err) {
+                    alert('Error importing saved words');
+                }
+            };
+            reader.readAsText(file);
+        });
+        fileInput.click();
+    }
+
+    // Create a button to import saved words and game numbers
+    const importSavedWordsButton = document.createElement('button');
+    importSavedWordsButton.textContent = 'Import Saved Words';
+    importSavedWordsButton.addEventListener('click', importSavedWords);
+    savedWordsGUI.appendChild(importSavedWordsButton);
+
+    // Define CSS styles for the saved words GUI
+    const css = `
+        #saved-words-list {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            background-color: white;
+            border: 2px solid black;
+            border-radius: 5px 0 0 0;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        #saved-words-list.open {
+            display: block;
+        }
+    #saved-words-list button {
+        margin: 5px;
+        padding: 0;
+        background: none;
+        border: none;
+        cursor: pointer;
+    }
+    #saved-words-list img {
+        width: 20px;
+        height: 20px;
+    }
+`;
+
+    // Add the CSS styles to the page
+    const style = document.createElement('style');
+    style.innerHTML = css;
+    document.head.appendChild(style);
+
+    // Fetch saved words and game numbers from JSONBin.io on page load
+    fetchSavedWords();
+
+    // Search for words and game numbers to save on page load and every 5 seconds
+    searchForWordsAndGameNumbers();
+    setInterval(searchForWordsAndGameNumbers, 17000);//15 seconds
+})();
