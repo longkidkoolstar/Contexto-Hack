@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Contexto Hack
 // @namespace    your-namespace-here
-// @version      2.0
+// @version      2.2
 // @author       longkidkoolstar
 // @description  This is a Contexto Hack that Gives you the word of the day for everyday.
 // @icon         https://styles.redditmedia.com/t5_72ajpm/styles/communityIcon_2y8kmvv8z6wa1.png?width=256&v=enabled&s=497ae2191ac283aadfc5da5941539fcc5a575e1b
@@ -29,34 +29,53 @@
     let gameNumbers = {};
 
 function fetchSavedWords() {
-  setInterval(() => {
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url: `https://api.jsonbin.io/v3/b/${binId}/latest`,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Bin-Access-Token': accessKey,
-        'X-Access-Key': accessKey
-      },
-      onload: function(response) {
-        if (response.status === 200) {
-          const responseData = JSON.parse(response.responseText);
-          if (responseData.record) {
-            const recordData = responseData.record;
-            if (recordData.savedWords) {
-              savedWords = recordData.savedWords;
+    // Check if saved words exist in the Tampermonkey storage
+    const savedWordsData = GM_getValue('savedWordsData');
+    if (savedWordsData) {
+        savedWords = savedWordsData.savedWords;
+        gameNumbers = savedWordsData.gameNumbers;
+        console.log('Loaded saved words from Tampermonkey storage');
+        updateSavedWordsGUI();
+    }
+
+    // Fetch saved words from JSONBin.io every 20 seconds
+    setInterval(() => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://api.jsonbin.io/v3/b/${binId}/latest`,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Bin-Access-Token': accessKey,
+                'X-Access-Key': accessKey
+            },
+            onload: function(response) {
+                if (response.status === 200) {
+                    const responseData = JSON.parse(response.responseText);
+                    if (responseData.record) {
+                        const recordData = responseData.record;
+                        if (recordData.savedWords) {
+                            savedWords = recordData.savedWords;
+                        }
+                        if (recordData.gameNumbers) {
+                            gameNumbers = recordData.gameNumbers;
+                        }
+                    }
+                    console.log('Read saved words successfully');
+                    updateSavedWordsGUI();
+
+                    // Save fetched words to Tampermonkey storage
+                    const savedWordsData = {
+                        savedWords: savedWords,
+                        gameNumbers: gameNumbers
+                    };
+                    GM_setValue('savedWordsData', savedWordsData);
+                    console.log('Saved fetched words to Tampermonkey storage');
+                }
             }
-            if (recordData.gameNumbers) {
-              gameNumbers = recordData.gameNumbers;
-            }
-          }
-          console.log('Read saved words successfully');
-          updateSavedWordsGUI();
-        }
-      }
-    });
-  }, 20000); // Fetch every 1000 milliseconds (20 second)
+        });
+    }, 20000); // Fetch every 20 seconds (20000 milliseconds)
 }
+
 
 
 
@@ -320,5 +339,5 @@ function fetchSavedWords() {
 
     // Search for words and game numbers to save on page load and every 5 seconds
     searchForWordsAndGameNumbers();
-    setInterval(searchForWordsAndGameNumbers, 17000);//15 seconds
+    setInterval(searchForWordsAndGameNumbers, 17000);//17 seconds
 })();
